@@ -1,4 +1,4 @@
-Review Google Calendar for the current week and ensure every meeting has a conference room reserved in SFO Floor 15. If a meeting already has an SFO Floor 15 room, skip it. If not, book one following the preference order below. Send a single summary email at the end if any meetings could not be booked.
+Review Google Calendar for today and the next 2 days and ensure every meeting has a conference room reserved in SFO Floor 15. If a meeting already has an SFO Floor 15 room, skip it. If not, book one following the preference order below. Send a single summary email at the end if any meetings could not be booked.
 
 ## Room Preference Order
 
@@ -21,15 +21,15 @@ Review Google Calendar for the current week and ensure every meeting has a confe
 
 ## Steps
 
-### 1. Determine the current week's date range
-- Calculate Monday through Friday of the current week (use the current date as reference).
+### 1. Determine the date range
+- The range is today through 2 days from now (3 days total).
 - Use Pacific Time (America/Los_Angeles) for all time boundaries.
 
-### 2. Fetch all calendar events for the week
+### 2. Fetch all calendar events for the date range
 - Use `mcp__google__google_read_api_call` with endpoint `calendar/events`.
-- Set `timeMin` to Monday 00:00:00 and `timeMax` to Saturday 00:00:00 (Pacific).
+- Set `timeMin` to today 00:00:00 and `timeMax` to (today + 3 days) 00:00:00 (Pacific).
 - Use `singleEvents: true` and `orderBy: startTime` to expand recurring events.
-- Set `maxResults: 250` to capture a full week.
+- Set `maxResults: 250`.
 
 ### 3. Filter to real meetings only
 Skip events that are:
@@ -37,19 +37,26 @@ Skip events that are:
 - Working location events (`eventType: "workingLocation"`)
 - Events with `status: "cancelled"`
 - Events the user has declined (`responseStatus: "declined"`)
+- Events with any of these titles (case-insensitive, partial match):
+  - "R&D All Hands"
+  - "EMEA Company All Hands"
+  - "R&D Ops Lunch / Dinner"
+  - "Meet People at Lunch"
+  - "Check-Ins"
 
 ### 4. Check each meeting for an SFO Floor 15 room
 A meeting already has an SFO Floor 15 room if any attendee with `resource: true` has a `displayName` containing `"SFO-15"`. If it does, mark it as covered and move on.
 
 ### 5. Check room availability for meetings that need rooms
 - Use `mcp__google__google_read_api_call` with endpoint `calendar/freebusy`.
-- Query all 9 rooms listed above for the full week timespan in a single call.
+- Query all 9 rooms listed above for the full date range in a single call.
 - For each meeting that needs a room, check which rooms from the preference list are free during that meeting's exact time slot.
 - A room is free if none of its busy periods overlap with the meeting's start/end time.
 
 ### 6. Book rooms
 For each meeting needing a room, pick the highest-preference available room and update the event:
 - Use `mcp__google__google_write_api_call` with endpoint `calendar/events/{eventId}`.
+- Pass `params: {"sendUpdates": "none"}` to suppress notifications to organizers and attendees.
 - Add the room's resource email to the attendees list (preserve all existing attendees).
 - Update the `location` field to include the room name.
 - If the update fails (e.g., permission denied because you're not the organizer and `guestsCanModify` is not true), log the failure and continue.
